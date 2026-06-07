@@ -18,8 +18,9 @@ err = bot.HandleCommand("deploy", func(ctx *mmbot.Context) error {
     return ctx.Replyf("Deploying `%s` to `%s`", service, environment)
 },
     mmbot.Description("Deploy a service"),
-    mmbot.Usage(`!deploy "service name" <environment>`),
+    mmbot.Usage(`@bot deploy "service name" <environment>`),
     mmbot.Aliases("ship"),
+    mmbot.RequireMention(),
     mmbot.CommandGuards(mmbot.AllowUsernames("alice")),
 )
 if err != nil {
@@ -40,9 +41,18 @@ single and double quotes, backslash escapes, empty quoted values, and adjacent
 fragments:
 
 ```text
-!deploy "service api" production
+@mybot deploy "service api" production
 !echo one\ value "" prefix"suffix"
 ```
+
+Add `RequireMention()` to commands that must start with the bot's mention.
+For example, `@mybot deploy production` is routed while `!deploy production`
+is silently ignored. The mention must be at the beginning of the message;
+aliases, argument parsing, guards, and middleware work as they do for ordinary
+commands. Unknown text after a leading mention is passed to `HandleMention`.
+
+`Help()` renders mention-required commands as `@username command` after the bot
+starts and uses `@bot command` before the bot username is available.
 
 Use `bot.Use` for global middleware and `CommandMiddleware` or
 `RouteMiddleware` for one route. Guards return `nil` to allow execution and an

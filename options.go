@@ -116,6 +116,15 @@ func Hidden() CommandOption {
 	})
 }
 
+// RequireMention makes a command routable only when the message starts with
+// the bot's @username instead of the configured command prefix.
+func RequireMention() CommandOption {
+	return commandOption(func(config *commandConfig) error {
+		config.mentionRequired = true
+		return nil
+	})
+}
+
 // CommandMiddleware adds middleware to one command.
 func CommandMiddleware(values ...Middleware) CommandOption {
 	return commandOption(func(config *commandConfig) error {

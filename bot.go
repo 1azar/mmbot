@@ -251,6 +251,13 @@ func (b *Bot) routeEvent(ctx context.Context, event *model.WebSocketEvent) (hand
 	}
 
 	parsed, parseErr := parseCommand(b.config.Prefix, message.Text)
+	mentioned, mentionParseErr, startsWithMention := parseMentionCommand(b.me.Username, message.Text)
+	if startsWithMention {
+		if command := b.commands[mentioned.name]; mentioned.ok && command != nil && command.config.mentionRequired {
+			parsed = mentioned
+			parseErr = mentionParseErr
+		}
+	}
 	handlerCtx := NewContext(ctx, b.client, ContextInput{
 		Message: message,
 		Command: parsed.name,
@@ -258,6 +265,9 @@ func (b *Bot) routeEvent(ctx context.Context, event *model.WebSocketEvent) (hand
 		RawArgs: parsed.rawArgs,
 	})
 	if parseErr != nil {
+		if command := b.commands[parsed.name]; command != nil && command.config.mentionRequired && !startsWithMention {
+			return handlerJob{}, false
+		}
 		if err := b.onParseError(handlerCtx, parseErr); err != nil {
 			b.onError(handlerCtx, err)
 		}
@@ -267,6 +277,9 @@ func (b *Bot) routeEvent(ctx context.Context, event *model.WebSocketEvent) (hand
 	if parsed.ok {
 		command := b.commands[parsed.name]
 		if command != nil {
+			if command.config.mentionRequired && !startsWithMention {
+				return handlerJob{}, false
+			}
 			handlerCtx.command = command.name
 			return handlerJob{handler: b.prepare(command.handler, command.config.guards, command.config.middleware), ctx: handlerCtx}, true
 		}

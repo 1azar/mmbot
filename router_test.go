@@ -66,6 +66,13 @@ func TestCommandRegistrationAndHelp(t *testing.T) {
 	if err := bot.HandleCommand("health", handler); err != nil {
 		t.Fatal(err)
 	}
+	if err := bot.HandleCommand("restart", handler,
+		RequireMention(),
+		Description("Restart a service"),
+		Usage("@bot restart <service>"),
+	); err != nil {
+		t.Fatal(err)
+	}
 	if err := bot.HandleCommand("secret", handler, Hidden()); err != nil {
 		t.Fatal(err)
 	}
@@ -73,9 +80,46 @@ func TestCommandRegistrationAndHelp(t *testing.T) {
 		t.Fatal("expected duplicate alias error")
 	}
 
-	want := "- `!deploy <service>` - Deploy a service\n- `!health`\n"
+	want := "- `!deploy <service>` - Deploy a service\n- `!health`\n- `@bot restart <service>` - Restart a service\n"
 	if help := bot.Help(); help != want {
 		t.Fatalf("unexpected help:\n%s", help)
+	}
+
+	bot.me = &User{Username: "helper"}
+	want = "- `!deploy <service>` - Deploy a service\n- `!health`\n- `@helper restart <service>` - Restart a service\n"
+	if help := bot.Help(); help != want {
+		t.Fatalf("unexpected help with username:\n%s", help)
+	}
+
+	for _, command := range bot.Commands() {
+		if command.Name == "restart" && !command.MentionRequired {
+			t.Fatal("restart command does not expose MentionRequired")
+		}
+	}
+}
+
+func TestParseMentionCommand(t *testing.T) {
+	t.Parallel()
+
+	parsed, err, mentioned := parseMentionCommand(
+		"helper",
+		`  @helper deploy "service api" prod\ eu`,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mentioned || parsed.name != "deploy" || parsed.rawArgs != `"service api" prod\ eu` {
+		t.Fatalf("unexpected command: %#v mentioned=%v", parsed, mentioned)
+	}
+	if want := []string{"service api", "prod eu"}; !reflect.DeepEqual(parsed.args, want) {
+		t.Fatalf("args = %#v, want %#v", parsed.args, want)
+	}
+
+	if _, _, mentioned := parseMentionCommand("helper", "hello @helper deploy"); mentioned {
+		t.Fatal("mention outside the beginning was parsed as a command")
+	}
+	if _, _, mentioned := parseMentionCommand("helper", "@helper-extra deploy"); mentioned {
+		t.Fatal("partial username mention was parsed as a command")
 	}
 }
 

@@ -55,6 +55,7 @@ func TestRouteAndCommandOptions(t *testing.T) {
 	middleware := func(next Handler) Handler { return next }
 	guard := func(*Context) error { return nil }
 	if err := bot.HandleCommand("command", func(*Context) error { return nil },
+		RequireMention(),
 		CommandMiddleware(middleware),
 		CommandGuards(guard),
 	); err != nil {
@@ -66,7 +67,8 @@ func TestRouteAndCommandOptions(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if len(bot.commands["command"].config.middleware) != 1 ||
+	if !bot.commands["command"].config.mentionRequired ||
+		len(bot.commands["command"].config.middleware) != 1 ||
 		len(bot.mention.middleware) != 1 ||
 		len(bot.mention.guards) != 1 {
 		t.Fatal("route options were not applied")

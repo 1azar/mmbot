@@ -119,11 +119,13 @@ func main() {
 		mmbot.Aliases("say"),
 	))
 
-	// This command combines command-specific middleware and composed guards.
+	// This mention-only command also combines command-specific middleware and
+	// composed guards. Invoke it as @botname deploy, not !deploy.
 	must(bot.HandleCommand("deploy", deployHandler,
 		mmbot.Description("Simulate a service deployment"),
-		mmbot.Usage(`!deploy "service name" <environment>`),
+		mmbot.Usage(`@bot deploy "service name" <environment>`),
 		mmbot.Aliases("ship"),
+		mmbot.RequireMention(),
 		mmbot.CommandMiddleware(auditMiddleware(logger)),
 		mmbot.CommandGuards(mmbot.AllGuards(adminGuard, locationGuard)),
 	))
@@ -268,10 +270,11 @@ func commandListHandler(ctx *mmbot.Context, commands []mmbot.CommandInfo) error 
 	for _, command := range commands {
 		fmt.Fprintf(
 			&builder,
-			"name=%s aliases=%v hidden=%t usage=%q description=%q\n",
+			"name=%s aliases=%v hidden=%t mention_required=%t usage=%q description=%q\n",
 			command.Name,
 			command.Aliases,
 			command.Hidden,
+			command.MentionRequired,
 			command.Usage,
 			command.Description,
 		)

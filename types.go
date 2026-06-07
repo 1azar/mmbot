@@ -37,9 +37,10 @@ type User struct {
 
 // CommandInfo describes a registered command.
 type CommandInfo struct {
-	Name        string
-	Description string
-	Usage       string
-	Aliases     []string
-	Hidden      bool
+	Name            string
+	Description     string
+	Usage           string
+	Aliases         []string
+	Hidden          bool
+	MentionRequired bool
 }

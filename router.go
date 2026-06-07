@@ -9,12 +9,13 @@ import (
 )
 
 type commandConfig struct {
-	description string
-	usage       string
-	aliases     []string
-	hidden      bool
-	middleware  []Middleware
-	guards      []Guard
+	description     string
+	usage           string
+	aliases         []string
+	hidden          bool
+	mentionRequired bool
+	middleware      []Middleware
+	guards          []Guard
 }
 
 type commandRoute struct {
@@ -141,11 +142,12 @@ func (b *Bot) Commands() []CommandInfo {
 		}
 		seen[command] = struct{}{}
 		result = append(result, CommandInfo{
-			Name:        command.name,
-			Description: command.config.description,
-			Usage:       command.config.usage,
-			Aliases:     append([]string(nil), command.config.aliases...),
-			Hidden:      command.config.hidden,
+			Name:            command.name,
+			Description:     command.config.description,
+			Usage:           command.config.usage,
+			Aliases:         append([]string(nil), command.config.aliases...),
+			Hidden:          command.config.hidden,
+			MentionRequired: command.config.mentionRequired,
 		})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
@@ -161,7 +163,13 @@ func (b *Bot) Help() string {
 		}
 		usage := command.Usage
 		if usage == "" {
-			usage = b.config.Prefix + command.Name
+			if command.MentionRequired {
+				usage = b.mentionPrefix() + " " + command.Name
+			} else {
+				usage = b.config.Prefix + command.Name
+			}
+		} else if command.MentionRequired {
+			usage = replaceBotMention(usage, b.mentionPrefix())
 		}
 		builder.WriteString("- `")
 		builder.WriteString(usage)
@@ -173,6 +181,24 @@ func (b *Bot) Help() string {
 		builder.WriteByte('\n')
 	}
 	return builder.String()
+}
+
+func (b *Bot) mentionPrefix() string {
+	if b.me != nil && b.me.Username != "" {
+		return "@" + b.me.Username
+	}
+	return "@bot"
+}
+
+func replaceBotMention(usage, mention string) string {
+	const placeholder = "@bot"
+	if !strings.HasPrefix(usage, placeholder) {
+		return usage
+	}
+	if len(usage) > len(placeholder) && isUsernameRune(rune(usage[len(placeholder)])) {
+		return usage
+	}
+	return mention + usage[len(placeholder):]
 }
 
 type parsedCommand struct {
@@ -188,6 +214,25 @@ func parseCommand(prefix, text string) (parsedCommand, *CommandParseError) {
 		return parsedCommand{}, nil
 	}
 	raw := strings.TrimSpace(strings.TrimPrefix(text, prefix))
+	return parseCommandText(raw, len(prefix))
+}
+
+func parseMentionCommand(username, text string) (parsedCommand, *CommandParseError, bool) {
+	text = strings.TrimSpace(text)
+	mention := "@" + username
+	if username == "" || !strings.HasPrefix(text, mention) {
+		return parsedCommand{}, nil, false
+	}
+	if len(text) > len(mention) && isUsernameRune(rune(text[len(mention)])) {
+		return parsedCommand{}, nil, false
+	}
+
+	raw := strings.TrimSpace(text[len(mention):])
+	parsed, parseErr := parseCommandText(raw, len(mention))
+	return parsed, parseErr, true
+}
+
+func parseCommandText(raw string, baseOffset int) (parsedCommand, *CommandParseError) {
 	if raw == "" {
 		return parsedCommand{}, nil
 	}
@@ -197,7 +242,7 @@ func parseCommand(prefix, text string) (parsedCommand, *CommandParseError) {
 		return parsedCommand{name: strings.ToLower(raw), ok: true}, nil
 	}
 	rawArgs := strings.TrimSpace(raw[index:])
-	args, parseErr := parseArguments(rawArgs, len(prefix)+index+1)
+	args, parseErr := parseArguments(rawArgs, baseOffset+index+1)
 	return parsedCommand{
 		name:    strings.ToLower(raw[:index]),
 		args:    args,

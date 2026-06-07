@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -71,6 +73,150 @@ func TestRoutePriorityAndAlias(t *testing.T) {
 	}
 	if called != "deploy:api" {
 		t.Fatalf("unexpected handler: %q", called)
+	}
+}
+
+func TestMentionRequiredCommandRouting(t *testing.T) {
+	t.Parallel()
+
+	bot := newTestBot(t)
+	bot.client = &sdkClient{raw: &fakeAPI{users: map[string]*model.User{}}}
+	bot.me = &User{ID: "bot", Username: "helper"}
+
+	var calls []string
+	if err := bot.HandleCommand("deploy", func(ctx *Context) error {
+		calls = append(calls, ctx.Command()+":"+ctx.RawArgs()+":"+strings.Join(ctx.Args(), "|"))
+		return nil
+	},
+		RequireMention(),
+		Aliases("ship"),
+		CommandMiddleware(func(next Handler) Handler {
+			return func(ctx *Context) error {
+				calls = append(calls, "middleware")
+				return next(ctx)
+			}
+		}),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := bot.HandleCommand("ping", func(ctx *Context) error {
+		calls = append(calls, ctx.Command())
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := bot.HandleMention(func(*Context) error {
+		calls = append(calls, "mention")
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := bot.HandleMessage(func(*Context) error {
+		calls = append(calls, "message")
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(text string) bool {
+		t.Helper()
+		job, ok := bot.routeEvent(context.Background(), postedEvent(text, "user", "alice", "channel", "team"))
+		if ok {
+			if err := job.handler(job.ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return ok
+	}
+
+	if !run(`@helper ship "service api" prod\ eu`) {
+		t.Fatal("mention command was not routed")
+	}
+	if want := []string{"middleware", `deploy:"service api" prod\ eu:service api|prod eu`}; !reflect.DeepEqual(calls, want) {
+		t.Fatalf("calls = %#v, want %#v", calls, want)
+	}
+	calls = nil
+
+	if run("!deploy prod") || len(calls) != 0 {
+		t.Fatalf("prefixed mention command was not ignored: %#v", calls)
+	}
+	if !run("hello @helper deploy prod") || !reflect.DeepEqual(calls, []string{"mention"}) {
+		t.Fatalf("non-leading mention did not use mention route: %#v", calls)
+	}
+	calls = nil
+
+	if !run("!ping") || !reflect.DeepEqual(calls, []string{"ping"}) {
+		t.Fatalf("ordinary command failed: %#v", calls)
+	}
+	calls = nil
+
+	if !run("@helper unknown text") || !reflect.DeepEqual(calls, []string{"mention"}) {
+		t.Fatalf("unknown mention text did not use mention route: %#v", calls)
+	}
+	if !run("@helper !deploy prod") || !reflect.DeepEqual(calls, []string{"mention", "mention"}) {
+		t.Fatalf("unsupported mention syntax did not use mention route: %#v", calls)
+	}
+}
+
+func TestMentionRequiredCommandGuardAndParseError(t *testing.T) {
+	t.Parallel()
+
+	var parseErrors atomic.Int32
+	var unauthorized atomic.Int32
+	var handled atomic.Int32
+	bot, err := New(Config{
+		ServerURL: "https://mattermost.example.com",
+		Token:     "token",
+	}, WithCommandParseErrorHandler(func(_ *Context, parseErr *CommandParseError) error {
+		if errors.Is(parseErr, ErrInvalidCommandSyntax) {
+			parseErrors.Add(1)
+		}
+		return nil
+	}), WithUnauthorizedHandler(func(*Context, error) error {
+		unauthorized.Add(1)
+		return nil
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bot.client = &sdkClient{raw: &fakeAPI{users: map[string]*model.User{}}}
+	bot.me = &User{ID: "bot", Username: "helper"}
+	if err := bot.HandleCommand("deploy", func(*Context) error {
+		handled.Add(1)
+		return nil
+	}, RequireMention(), CommandGuards(AllowUserIDs("allowed"))); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := bot.routeEvent(context.Background(), postedEvent(
+		`@helper deploy "unterminated`, "user", "alice", "channel", "team",
+	)); ok {
+		t.Fatal("malformed mention command was routed")
+	}
+	if parseErrors.Load() != 1 {
+		t.Fatalf("parse errors = %d, want 1", parseErrors.Load())
+	}
+
+	if _, ok := bot.routeEvent(context.Background(), postedEvent(
+		`!deploy "unterminated`, "user", "alice", "channel", "team",
+	)); ok {
+		t.Fatal("malformed prefixed mention command was routed")
+	}
+	if parseErrors.Load() != 1 {
+		t.Fatalf("prefixed call reported a parse error: %d", parseErrors.Load())
+	}
+
+	job, ok := bot.routeEvent(context.Background(), postedEvent(
+		"@helper deploy prod", "user", "alice", "channel", "team",
+	))
+	if !ok {
+		t.Fatal("guarded mention command was not routed")
+	}
+	if err := job.handler(job.ctx); err != nil {
+		t.Fatal(err)
+	}
+	if unauthorized.Load() != 1 || handled.Load() != 0 {
+		t.Fatalf("unauthorized=%d handled=%d", unauthorized.Load(), handled.Load())
 	}
 }
 
