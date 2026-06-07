@@ -12,8 +12,9 @@ import (
 
 func main() {
 	bot, err := mmbot.New(mmbot.Config{
-		ServerURL: os.Getenv("MM_URL"),
-		Token:     os.Getenv("MM_TOKEN"),
+		ServerURL:    os.Getenv("MM_URL"),
+		WebSocketURL: os.Getenv("MM_WEBSOCKET_URL"),
+		Token:        os.Getenv("MM_TOKEN"),
 	}, mmbot.WithLogger(slog.Default()))
 	if err != nil {
 		log.Fatal(err)

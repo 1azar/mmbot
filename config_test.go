@@ -22,6 +22,9 @@ func TestConfigNormalized(t *testing.T) {
 	if config.ServerURL != "https://mattermost.example.com" {
 		t.Fatalf("unexpected URL: %q", config.ServerURL)
 	}
+	if config.WebSocketURL != "wss://mattermost.example.com" {
+		t.Fatalf("unexpected WebSocket URL: %q", config.WebSocketURL)
+	}
 	if config.Prefix != "!" {
 		t.Fatalf("unexpected prefix: %q", config.Prefix)
 	}
@@ -39,6 +42,22 @@ func TestConfigNormalized(t *testing.T) {
 	}
 }
 
+func TestConfigWebSocketURLOverride(t *testing.T) {
+	t.Parallel()
+
+	config, err := (Config{
+		ServerURL:    "https://mattermost.example.com/mattermost",
+		WebSocketURL: "wss://socket.example.com/custom/",
+		Token:        "token",
+	}).normalized()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.WebSocketURL != "wss://socket.example.com/custom" {
+		t.Fatalf("unexpected WebSocket URL: %q", config.WebSocketURL)
+	}
+}
+
 func TestConfigValidation(t *testing.T) {
 	t.Parallel()
 
@@ -46,6 +65,8 @@ func TestConfigValidation(t *testing.T) {
 		{Token: "token"},
 		{ServerURL: "localhost", Token: "token"},
 		{ServerURL: "https://example.com"},
+		{ServerURL: "wss://example.com", Token: "token"},
+		{ServerURL: "https://example.com", WebSocketURL: "https://example.com", Token: "token"},
 		{ServerURL: "https://example.com", Token: "token", Prefix: " !"},
 		{ServerURL: "https://example.com", Token: "token", ReconnectMin: 2 * time.Second, ReconnectMax: time.Second},
 		{ServerURL: "https://example.com", Token: "token", HandlerConcurrency: -1},

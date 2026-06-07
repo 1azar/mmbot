@@ -377,6 +377,53 @@ func TestRunReconnectsAfterSocketClose(t *testing.T) {
 	}
 }
 
+func TestRunUsesServerAndWebSocketURLs(t *testing.T) {
+	t.Parallel()
+
+	bot, err := New(Config{
+		ServerURL:    "https://mattermost.example.com",
+		WebSocketURL: "wss://socket.example.com/mattermost",
+		Token:        "token",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	api := &fakeAPI{me: &model.User{Id: "bot", Username: "helper"}}
+	socket := newFakeSocket()
+	var restURL, socketURL string
+	connected := make(chan struct{})
+	bot.newClient = func(serverURL, _ string) runtimeClient {
+		restURL = serverURL
+		return &sdkClient{raw: api}
+	}
+	bot.connect = func(serverURL, _ string) (webSocket, error) {
+		socketURL = serverURL
+		close(connected)
+		return socket, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- bot.Run(ctx) }()
+	select {
+	case <-connected:
+		cancel()
+	case <-time.After(time.Second):
+		cancel()
+		t.Fatal("bot did not connect")
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if restURL != "https://mattermost.example.com" {
+		t.Fatalf("REST URL = %q", restURL)
+	}
+	if socketURL != "wss://socket.example.com/mattermost" {
+		t.Fatalf("WebSocket URL = %q", socketURL)
+	}
+}
+
 func TestWorkerRecoversPanics(t *testing.T) {
 	t.Parallel()
 

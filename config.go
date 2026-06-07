@@ -29,9 +29,12 @@ const (
 
 // Config controls the Mattermost connection and message processing.
 type Config struct {
+	// ServerURL is the Mattermost base URL using the http or https scheme.
 	ServerURL string
-	Token     string
-	Prefix    string
+	// WebSocketURL overrides the WebSocket base URL derived from ServerURL.
+	WebSocketURL string
+	Token        string
+	Prefix       string
 
 	ChannelIDs []string
 	TeamIDs    []string
@@ -47,6 +50,7 @@ type Config struct {
 
 func (c Config) normalized() (Config, error) {
 	c.ServerURL = strings.TrimRight(strings.TrimSpace(c.ServerURL), "/")
+	c.WebSocketURL = strings.TrimRight(strings.TrimSpace(c.WebSocketURL), "/")
 	c.Token = strings.TrimSpace(c.Token)
 
 	if c.ServerURL == "" {
@@ -55,6 +59,16 @@ func (c Config) normalized() (Config, error) {
 	u, err := url.Parse(c.ServerURL)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return Config{}, fmt.Errorf("mmbot: ServerURL must be an absolute http(s) URL")
+	}
+	c.ServerURL = u.String()
+	if c.WebSocketURL == "" {
+		c.WebSocketURL = webSocketURL(c.ServerURL)
+	} else {
+		u, err = url.Parse(c.WebSocketURL)
+		if err != nil || u.Host == "" || (u.Scheme != "ws" && u.Scheme != "wss") {
+			return Config{}, fmt.Errorf("mmbot: WebSocketURL must be an absolute ws(s) URL")
+		}
+		c.WebSocketURL = u.String()
 	}
 	if c.Token == "" {
 		return Config{}, errors.New("mmbot: Token is required")

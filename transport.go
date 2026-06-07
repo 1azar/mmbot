@@ -2,6 +2,7 @@ package mmbot
 
 import (
 	"fmt"
+	"net/url"
 
 	"github.com/mattermost/mattermost/server/public/model"
 )
@@ -37,4 +38,15 @@ func connectWebSocket(serverURL, token string) (webSocket, error) {
 		return nil, fmt.Errorf("mmbot: connect websocket: %w", err)
 	}
 	return &sdkWebSocket{client: client}, nil
+}
+
+func webSocketURL(serverURL string) string {
+	u, _ := url.Parse(serverURL)
+	switch u.Scheme {
+	case "http":
+		u.Scheme = "ws"
+	case "https":
+		u.Scheme = "wss"
+	}
+	return u.String()
 }

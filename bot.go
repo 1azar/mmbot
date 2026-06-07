@@ -144,7 +144,7 @@ func (b *Bot) connectionLoop(ctx context.Context, scheduler *scheduler) error {
 			return nil
 		}
 
-		socket, err := b.connect(b.config.ServerURL, b.config.Token)
+		socket, err := b.connect(b.config.WebSocketURL, b.config.Token)
 		if err != nil {
 			b.logger.WarnContext(ctx, "mmbot websocket connection failed", "error", err, "retry_in", backoff)
 			if err := b.waitReconnect(ctx, backoff); err != nil {

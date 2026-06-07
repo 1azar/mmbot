@@ -23,9 +23,10 @@ func main() {
 	// Config contains connection settings, optional global allowlists, reconnect
 	// behavior, and limits for ordered concurrent handler execution.
 	config := mmbot.Config{
-		ServerURL: os.Getenv("MM_URL"),
-		Token:     os.Getenv("MM_TOKEN"),
-		Prefix:    envOrDefault("MM_PREFIX", "!"),
+		ServerURL:    os.Getenv("MM_URL"),
+		WebSocketURL: os.Getenv("MM_WEBSOCKET_URL"),
+		Token:        os.Getenv("MM_TOKEN"),
+		Prefix:       envOrDefault("MM_PREFIX", "!"),
 
 		ChannelIDs: splitEnv("MM_CHANNEL_IDS"),
 		TeamIDs:    splitEnv("MM_TEAM_IDS"),

@@ -50,3 +50,23 @@ func TestSDKWebSocketAdapter(t *testing.T) {
 		t.Fatal("expected adapter error")
 	}
 }
+
+func TestWebSocketURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		serverURL string
+		want      string
+	}{
+		{serverURL: "http://mattermost.example.com", want: "ws://mattermost.example.com"},
+		{serverURL: "https://mattermost.example.com", want: "wss://mattermost.example.com"},
+		{serverURL: "https://example.com/mattermost", want: "wss://example.com/mattermost"},
+	}
+
+	for _, test := range tests {
+		got := webSocketURL(test.serverURL)
+		if got != test.want {
+			t.Fatalf("webSocketURL(%q) = %q, want %q", test.serverURL, got, test.want)
+		}
+	}
+}

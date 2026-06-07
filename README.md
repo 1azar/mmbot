@@ -93,9 +93,14 @@ MM_TOKEN=your-token \
 go run ./examples/comprehensive
 ```
 
+`MM_URL` must use the `http://` or `https://` scheme. The library derives the
+WebSocket URL automatically. Set `MM_WEBSOCKET_URL` to a `ws://` or `wss://`
+base URL only when the WebSocket endpoint differs from `MM_URL`.
+
 Optional environment variables configure the example without editing code:
 
 - `MM_PREFIX`
+- `MM_WEBSOCKET_URL`
 - `MM_CHANNEL_IDS`, `MM_TEAM_IDS`
 - `MM_ADMIN_USER_IDS`, `MM_ADMIN_USERNAMES`
 - `MM_COMMAND_CHANNEL_IDS`, `MM_COMMAND_TEAM_IDS`
